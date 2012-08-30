@@ -17,6 +17,14 @@ module Paperclip
 
         base.instance_exec do
           @sftp_options = options[:sftp_options] || {}
+
+          unless @options[:url].to_s.match(/^:sftp.*url$/)
+            @options[:path]  = @options[:path].gsub(/:url/, @options[:url])
+            @options[:url]   = ':sftp_public_url'
+          end
+          Paperclip.interpolates(:sftp_public_url) do |attachment, style|
+            attachment.public_url(style)
+          end unless Paperclip::Interpolations.respond_to? :sftp_public_url
         end
       end
 
