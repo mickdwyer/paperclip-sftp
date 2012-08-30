@@ -20,6 +20,23 @@ module Paperclip
         end
       end
 
+      # Generate useful URL for a given style
+      def public_url(style = default_style)
+        if @options[:sftp_host]
+          "#{dynamic_sftp_host_for_style(style)}/#{path(style)}"
+        else
+          "/#{path(style)}"
+        end
+      end
+
+      def dynamic_sftp_host_for_style(style)
+        if @options[:sftp_host].respond_to?(:call)
+          @options[:sftp_host].call(self)
+        else
+          @options[:sftp_host]
+        end
+      end
+
       # Make SFTP connection, but use current one if exists.
       #
       def sftp
