@@ -19,6 +19,8 @@ module Paperclip
           @sftp_options = options[:sftp_options] || {}
 
           @sftp_options[:fs_root] = '/' unless @sftp_options[:fs_root]
+          @sftp_options[:ssh_options] = {} if @sftp_options[:ssh_options].nil?
+          @sftp_options[:ssh_options][:password] = @sftp_options[:password] unless @sftp_options[:password].nil?
 
           unless @options[:url].to_s.match(/^:sftp.*url$/)
             @options[:path]  = @options[:path].gsub(/:url/, @options[:url])
@@ -50,16 +52,17 @@ module Paperclip
       # Make SFTP connection, but use current one if exists.
       #
       def sftp
+        Net::SSH::Authentication::KeyManager.new(nil) if @options[:use_agent] = true
         @sftp ||= Net::SFTP.start(
           @sftp_options[:host],
           @sftp_options[:user],
-          password: @sftp_options[:password]
+          @sftp_options[:ssh_options]
         )
       end
 
       def exists?(style = default_style)
         if original_filename
-          files = sftp.dir.entries(File.dirname(@options[:fs_root] + path(style))).map(&:name)
+          files = sftp.dir.entries(File.dirname(@sftp_options[:fs_root] + path(style))).map(&:name)
           files.include?(File.basename(path(style)))
         else
           false
@@ -69,8 +72,10 @@ module Paperclip
       end
 
       def copy_to_local_file(style, local_dest_path)
+        puts "#{@sftp_options.inspect}"
+        puts "#{@sftp_options[:fs_root]} - #{@sftp_options[:fs_root] + path(style)}"
         log("copying #{path(style)} to local file #{local_dest_path}")
-        sftp.download!(@options[:fs_root] + path(style), local_dest_path)
+        sftp.download!(@sftp_options[:fs_root] + path(style), local_dest_path)
       rescue Net::SFTP::StatusException => e
         warn("#{e} - cannot copy #{path(style)} to local file #{local_dest_path}")
         false
@@ -78,7 +83,7 @@ module Paperclip
 
       def flush_writes #:nodoc:
         @queued_for_write.each do |style, file|
-          mkdir_p(File.dirname(@sftp_options[:fs_root] + path(style)))
+          mkdir_p(File.dirname(path(style)))
           log("uploading #{file.path} to #{path(style)}")
           sftp.upload!(file.path, @sftp_options[:fs_root] + path(style))
           sftp.setstat!(@sftp_options[:fs_root] + path(style), :permissions => 0644)
